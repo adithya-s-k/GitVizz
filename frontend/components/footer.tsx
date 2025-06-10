@@ -41,7 +41,7 @@ const Footer = () => {
                         >
                             Cognitivelab
                         </a>{" "}
-                        (powered by <span className="font-semibold">omnibarse</span>)
+                        (powered by <span className="font-semibold">omniparse</span>)
                     </div>
                 </div>
                 <p className="text-center text-sm text-muted-foreground mt-4">
