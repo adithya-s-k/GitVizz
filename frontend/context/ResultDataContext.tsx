@@ -10,18 +10,31 @@ type Action =
   | { type: "SET_SOURCE_DATA"; payload: SourceData }
   | { type: "SET_LOADING"; payload: boolean }
   | { type: "SET_ERROR"; payload: string | null }
-  | { type: "RESET" };
+  | { type: "RESET" }
+  | { type: "SET_SELECTED_FILE_PATH"; payload: string | null }
+  | { type: "SET_SELECTED_FILE_LINE"; payload: number | null }
+  | { type: "SET_CODE_VIEWER_SHEET_OPEN"; payload: boolean };
 
-const initialState: State = {
+const initialState: State & {
+  selectedFilePath: string | null;
+  selectedFileLine: number | null;
+  codeViewerSheetOpen: boolean;
+} = {
   output: null,
   outputMessage: null,
   sourceType: null,
   sourceData: null,
   loading: false,
   error: null,
+  selectedFilePath: null,
+  selectedFileLine: null,
+  codeViewerSheetOpen: false,
 };
 
-function reducer(state: State, action: Action): State {
+function reducer(
+  state: typeof initialState,
+  action: Action
+): typeof initialState {
   switch (action.type) {
     case "SET_OUTPUT":
       return { ...state, output: action.payload };
@@ -35,6 +48,12 @@ function reducer(state: State, action: Action): State {
       return { ...state, error: action.payload };
     case "SET_OUTPUT_MESSAGE":
       return { ...state, outputMessage: action.payload };
+    case "SET_SELECTED_FILE_PATH":
+      return { ...state, selectedFilePath: action.payload };
+    case "SET_SELECTED_FILE_LINE":
+      return { ...state, selectedFileLine: action.payload };
+    case "SET_CODE_VIEWER_SHEET_OPEN":
+      return { ...state, codeViewerSheetOpen: action.payload };
     case "RESET":
       return initialState;
     default:
@@ -50,6 +69,12 @@ interface ResultDataContextType extends State {
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   reset: () => void;
+  selectedFilePath: string | null;
+  selectedFileLine: number | null;
+  codeViewerSheetOpen: boolean;
+  setSelectedFilePath: (path: string | null) => void;
+  setSelectedFileLine: (line: number | null) => void;
+  setCodeViewerSheetOpen: (open: boolean) => void;
 }
 
 const ResultDataContext = createContext<ResultDataContextType | undefined>(undefined);
@@ -72,6 +97,9 @@ export function ResultDataProvider({ children }: { children: ReactNode }) {
   const setLoading = (loading: boolean) => dispatch({ type: "SET_LOADING", payload: loading });
   const setError = (error: string | null) => dispatch({ type: "SET_ERROR", payload: error });
   const reset = () => dispatch({ type: "RESET" });
+  const setSelectedFilePath = (path: string | null) => dispatch({ type: "SET_SELECTED_FILE_PATH", payload: path });
+  const setSelectedFileLine = (line: number | null) => dispatch({ type: "SET_SELECTED_FILE_LINE", payload: line });
+  const setCodeViewerSheetOpen = (open: boolean) => dispatch({ type: "SET_CODE_VIEWER_SHEET_OPEN", payload: open });
 
   return (
     <ResultDataContext.Provider
@@ -84,6 +112,12 @@ export function ResultDataProvider({ children }: { children: ReactNode }) {
         setLoading,
         setError,
         reset,
+        selectedFilePath: state.selectedFilePath,
+        selectedFileLine: state.selectedFileLine,
+        codeViewerSheetOpen: state.codeViewerSheetOpen,
+        setSelectedFilePath,
+        setSelectedFileLine,
+        setCodeViewerSheetOpen,
       }}
     >
       {children}

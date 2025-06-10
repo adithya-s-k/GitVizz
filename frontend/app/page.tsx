@@ -13,17 +13,19 @@ import Footer from "@/components/footer";
 
 
 export default function Home() {
-  const { error, outputMessage } = useResultData();
+  const { error, outputMessage, setError, setOutputMessage } = useResultData();
 
   useEffect(() => {
     if (error) {
       showToast.error(error);
+      setError(""); // Clear error after showing
     }
   }, [error]);
 
   useEffect(() => {
     if (outputMessage) {
       showToast.success(outputMessage);
+      setOutputMessage(""); // Clear message after showing
     }
   }, [outputMessage]);
 

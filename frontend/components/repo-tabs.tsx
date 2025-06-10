@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import {
   Tabs,
   TabsContent,
@@ -31,6 +31,8 @@ import {
 } from "@/utils/api";
 import { useResultData } from "@/context/ResultDataContext";
 
+import { useRouter } from "next/navigation";
+
 export function RepoTabs() {
   // Form state
   const [repoUrl, setRepoUrl] = useState("");
@@ -52,6 +54,9 @@ export function RepoTabs() {
     setSourceData,
     setOutputMessage,
   } = useResultData();
+
+  // Router for navigation
+  const router = useRouter();
 
   // GitHub form submit
   const handleGitHubSubmit = async (e: React.FormEvent) => {
@@ -78,6 +83,8 @@ export function RepoTabs() {
       setSourceType("github");
       setSourceData(requestData);
       setOutputMessage("Repository analysis successful!");
+      // Navigate to results page
+      router.push("/results");
     } catch (err: any) {
       setError(err.message || "Failed to analyze repository.");
     } finally {
@@ -104,6 +111,8 @@ export function RepoTabs() {
       setSourceType("zip");
       setSourceData(zipFile);
       setOutputMessage("ZIP file processed successfully!");
+      // Navigate to results page
+      router.push("/results");
     } catch (err: any) {
       setError(err.message || "Failed to process ZIP file.");
     } finally {

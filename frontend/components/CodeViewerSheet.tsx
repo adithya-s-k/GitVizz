@@ -13,13 +13,11 @@ import { CodeViewer } from "@/components/CodeViewer";
 interface CodeViewerSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  repoContent: string | null;
 }
 
 export function CodeViewerSheet({
   isOpen,
   onClose,
-  repoContent,
 }: CodeViewerSheetProps) {
   // Handle escape key to close the sheet
   useEffect(() => {
@@ -44,13 +42,7 @@ export function CodeViewerSheet({
           </SheetTitle>
         </SheetHeader>
         <div className="p-2">
-          {repoContent ? (
-            <CodeViewer repoContent={repoContent} />
-          ) : (
-            <div className="flex items-center justify-center h-[80vh] text-muted-foreground">
-              No repository content to display
-            </div>
-          )}
+          <CodeViewer />
         </div>
       </SheetContent>
     </Sheet>
