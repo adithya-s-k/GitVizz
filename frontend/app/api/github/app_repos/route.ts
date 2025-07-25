@@ -1,8 +1,6 @@
 // app/api/github/app_repos/route.ts
 
 import { NextRequest } from 'next/server';
-import { Octokit } from 'octokit';
-import { createAppAuth } from '@octokit/auth-app';
 
 export async function GET(req: NextRequest): Promise<Response> {
   const { searchParams } = new URL(req.url);
@@ -14,40 +12,70 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
+  // Authenticate the user making the request
+  const authHeader = req.headers.get('authorization');
+  const userAccessToken = authHeader?.split(' ')[1];
+
+  if (!userAccessToken) {
+    return new Response(JSON.stringify({ error: 'Missing access token' }), {
+      status: 401,
+    });
+  }
+
   try {
-    const auth = createAppAuth({
-      appId: process.env.GITHUB_APP_ID!,
-      privateKey: process.env.GITHUB_PRIVATE_KEY!.replace(/\\n/g, '\n'),
-      clientId: process.env.AUTH_GITHUB_ID!,
-      clientSecret: process.env.AUTH_GITHUB_SECRET!,
+    // First, verify the user has access to this installation
+    const userInstallationsRes = await fetch('https://api.github.com/user/installations', {
+      headers: {
+        Authorization: `Bearer ${userAccessToken}`,
+        Accept: 'application/vnd.github+json',
+      },
     });
 
-    const installationAuth = await auth({
-      type: 'installation',
-      installationId: Number(installationId),
-    });
-
-    const octokit = new Octokit({ auth: installationAuth.token });
-
-    console.log(`[DEBUG] Installation ID: ${installationId}`);
-
-    // Fetch all repositories with pagination using iterator
-    const allRepositories = [];
-
-    for await (const response of octokit.paginate.iterator(
-      octokit.rest.apps.listReposAccessibleToInstallation,
-      { per_page: 500 },
-    )) {
-      console.log(`[DEBUG] Fetched ${response.data.length} repositories in this page`);
-      allRepositories.push(...response.data);
+    if (!userInstallationsRes.ok) {
+      return new Response(JSON.stringify({ error: 'Unable to verify user installations' }), {
+        status: 403,
+      });
     }
 
-    console.log(`[DEBUG] Total repositories fetched: ${allRepositories.length}`);
+    const userInstallations = await userInstallationsRes.json();
+    const hasAccess = userInstallations.installations?.some(
+      (installation: any) => installation.id === Number(installationId)
+    );
+
+    if (!hasAccess) {
+      return new Response(JSON.stringify({ error: 'Access denied to this installation' }), {
+        status: 403,
+      });
+    }
+
+    // Get repositories accessible to the user for this specific installation
+    const userReposRes = await fetch(
+      `https://api.github.com/user/installations/${installationId}/repositories`,
+      {
+        headers: {
+          Authorization: `Bearer ${userAccessToken}`,
+          Accept: 'application/vnd.github+json',
+        },
+      }
+    );
+
+    if (!userReposRes.ok) {
+      const errorData = await userReposRes.json();
+      return new Response(
+        JSON.stringify({ error: errorData.message || 'Failed to fetch repositories' }),
+        { status: userReposRes.status }
+      );
+    }
+
+    const userReposData = await userReposRes.json();
+
+    console.log(`[DEBUG] Installation ID: ${installationId}`);
+    console.log(`[DEBUG] User has access to ${userReposData.repositories?.length || 0} repositories`);
 
     return new Response(
       JSON.stringify({
-        repositories: allRepositories,
-        total_count: allRepositories.length,
+        repositories: userReposData.repositories || [],
+        total_count: userReposData.total_count || 0,
       }),
       {
         status: 200,
