@@ -6,23 +6,42 @@ export async function GET(req: NextRequest): Promise<Response> {
   const { searchParams } = new URL(req.url);
   const installationId = searchParams.get('installationId');
 
+  // Validate installation ID
   if (!installationId) {
     return new Response(JSON.stringify({ error: 'Missing installationId' }), {
       status: 400,
     });
   }
 
+  // Validate installation ID is a valid number
+  const installationIdNum = Number(installationId);
+  if (isNaN(installationIdNum) || installationIdNum <= 0) {
+    return new Response(JSON.stringify({ error: 'Invalid installationId format' }), {
+      status: 400,
+    });
+  }
+
   // Authenticate the user making the request
   const authHeader = req.headers.get('authorization');
-  const userAccessToken = authHeader?.split(' ')[1];
+  
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return new Response(JSON.stringify({ error: 'Missing or invalid authorization header' }), {
+      status: 401,
+    });
+  }
 
-  if (!userAccessToken) {
-    return new Response(JSON.stringify({ error: 'Missing access token' }), {
+  const userAccessToken = authHeader.split(' ')[1];
+
+  if (!userAccessToken || userAccessToken.length < 10) {
+    return new Response(JSON.stringify({ error: 'Invalid access token format' }), {
       status: 401,
     });
   }
 
   try {
+    // Log the security-sensitive operation
+    console.log(`[SECURITY] Repository access request: installationId=${installationId}, hasAuth=${!!userAccessToken}`);
+
     // First, verify the user has access to this installation
     const userInstallationsRes = await fetch('https://api.github.com/user/installations', {
       headers: {
@@ -32,6 +51,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
 
     if (!userInstallationsRes.ok) {
+      console.log(`[SECURITY] Failed to verify user installations: ${userInstallationsRes.status}`);
       return new Response(JSON.stringify({ error: 'Unable to verify user installations' }), {
         status: 403,
       });
@@ -39,10 +59,11 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     const userInstallations = await userInstallationsRes.json();
     const hasAccess = userInstallations.installations?.some(
-      (installation: any) => installation.id === Number(installationId)
+      (installation: any) => installation.id === installationIdNum
     );
 
     if (!hasAccess) {
+      console.log(`[SECURITY] Access denied: user does not have access to installation ${installationId}`);
       return new Response(JSON.stringify({ error: 'Access denied to this installation' }), {
         status: 403,
       });
