@@ -30,7 +30,7 @@ import {
   Menu,
   X,
 } from 'lucide-react';
-import { CodeReferenceAnalyzer } from '@/components/code-reference-analyzer';
+import { EnhancedAnalysisTab } from '@/components/EnhancedAnalysisTab';
 import type { CodeReference, GraphData } from '@/types/code-analysis';
 
 // Properly import GraphCanvas with Next.js SSR handling
@@ -566,14 +566,11 @@ export default function EnhancedReagraphVisualization({
 
   const categoryData = useMemo(() => {
     if (!graphData?.nodes) return [];
-    const categoryCount = graphData.nodes.reduce(
-      (acc, node) => {
-        const category = node.category?.toLowerCase() || 'other';
-        acc[category] = (acc[category] || 0) + 1;
-        return acc;
-      },
-      {} as Record<string, number>,
-    );
+    const categoryCount = graphData.nodes.reduce((acc, node) => {
+      const category = node.category?.toLowerCase() || 'other';
+      acc[category] = (acc[category] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
 
     return Object.entries(nodeCategories)
       .map(([key, config]) => ({ key, config, count: categoryCount[key] || 0 }))
@@ -747,11 +744,17 @@ export default function EnhancedReagraphVisualization({
                   </TabsContent>
                   <TabsContent value="analysis" className="h-full m-0 p-0">
                     <div className="h-full" ref={analysisScrollRef}>
-                      {selectedCodeReference && analysisGraphData && (
-                        <CodeReferenceAnalyzer
+                      {analysisGraphData && (
+                        <EnhancedAnalysisTab
                           selectedNode={selectedCodeReference}
                           graphData={analysisGraphData}
-                          maxDepth={3}
+                          onNodeSelect={(node) => {
+                            const graphNode = graphData?.nodes.find((n) => n.id === node.id);
+                            if (graphNode) {
+                              setSelectedNode(graphNode);
+                              onNodeClick?.(graphNode);
+                            }
+                          }}
                           onOpenFile={handleOpenFile}
                         />
                       )}
@@ -897,11 +900,17 @@ export default function EnhancedReagraphVisualization({
 
               <TabsContent value="analysis" className="h-full m-0 p-0">
                 <div className="h-full" ref={analysisScrollRef}>
-                  {selectedCodeReference && analysisGraphData && (
-                    <CodeReferenceAnalyzer
+                  {analysisGraphData && (
+                    <EnhancedAnalysisTab
                       selectedNode={selectedCodeReference}
                       graphData={analysisGraphData}
-                      maxDepth={3}
+                      onNodeSelect={(node) => {
+                        const graphNode = graphData?.nodes.find((n) => n.id === node.id);
+                        if (graphNode) {
+                          setSelectedNode(graphNode);
+                          onNodeClick?.(graphNode);
+                        }
+                      }}
                       onOpenFile={handleOpenFile}
                     />
                   )}
