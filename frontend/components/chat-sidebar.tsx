@@ -23,14 +23,19 @@ import {
   Sparkles,
   ExternalLink,
   Brain,
+  Zap,
+  ToggleLeft,
+  ToggleRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ChatHistory } from './chat-history';
 import { ChatMessage } from './chat-message';
+import { AgenticChatMessage } from './agentic-message';
 import { ModelSelector } from './model-selector';
 import { ContextIndicator, ContextMetadata } from './context-indicator';
 import { ContextControls } from './context-controls';
 import { useChatSidebar } from '@/hooks/use-chat-sidebar';
+import { useAgenticChat } from '@/hooks/use-agentic-chat';
 
 interface ChatSidebarProps {
   isOpen: boolean;
@@ -66,7 +71,18 @@ export function ChatSidebar({
     autoLoad: isOpen && Boolean(repositoryId),
   }); // Pass preferences to hook
 
+  // Agentic chat functionality
+  const {
+    messages: agenticMessages,
+    toolCalls: agenticToolCalls,
+    isLoading: isAgenticLoading,
+    streamingContent: agenticStreamingContent,
+    sendMessage: sendAgenticMessage,
+    clearChat: clearAgenticChat,
+  } = useAgenticChat(repositoryId);
+
   const [input, setInput] = useState('');
+  const [useAgenticMode, setUseAgenticMode] = useState(true); // Default to agentic mode
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showContextControls, setShowContextControls] = useState(false);
@@ -77,11 +93,14 @@ export function ChatSidebar({
   const scrollAreaRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
+  const currentMessages = useAgenticMode ? agenticMessages : messages;
+  const currentIsLoading = useAgenticMode ? isAgenticLoading : isLoading;
+  
   useEffect(() => {
     if (messagesEndRef.current) {
       messagesEndRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
     }
-  }, [messages]);
+  }, [currentMessages, agenticStreamingContent]);
 
   // Focus input when sidebar opens
   useEffect(() => {
@@ -91,11 +110,28 @@ export function ChatSidebar({
   }, [isOpen]);
 
   const handleSendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+    if (!input.trim() || currentIsLoading) return;
 
     const message = input.trim();
     setInput('');
-    await sendMessage(message);
+
+    if (useAgenticMode) {
+      await sendAgenticMessage(message, currentModel?.model, currentModel?.provider);
+    } else {
+      await sendMessage(message);
+    }
+  };
+
+  const handleClearChat = () => {
+    if (useAgenticMode) {
+      clearAgenticChat();
+    } else {
+      clearCurrentChat();
+    }
+  };
+
+  const toggleChatMode = () => {
+    setUseAgenticMode(!useAgenticMode);
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -148,7 +184,7 @@ export function ChatSidebar({
     router.push('/api-keys');
   };
 
-  const hasActiveChat = messages.length > 0;
+  const hasActiveChat = currentMessages.length > 0;
 
   // Get user keys info for display
   const userHasKeys = availableModels?.user_has_keys || [];
@@ -205,14 +241,22 @@ export function ChatSidebar({
                 )}
               </div>
               <div className="space-y-1">
-                <h2 className="font-semibold text-base text-foreground">Repository Chat</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-semibold text-base text-foreground">Repository Chat</h2>
+                  {useAgenticMode && (
+                    <Badge variant="outline" className="text-xs bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800 flex items-center gap-1">
+                      <Zap className="h-3 w-3" />
+                      Agentic
+                    </Badge>
+                  )}
+                </div>
                 <p className="text-sm text-muted-foreground truncate max-w-[200px]">
                   {repositoryName}
                 </p>
                 <div className="flex items-center gap-2">
                   {hasActiveChat && (
                     <Badge variant="secondary" className="text-xs">
-                      {messages.length} messages
+                      {currentMessages.length} messages
                     </Badge>
                   )}
                   {activeUserKeys.length > 0 && (
@@ -257,6 +301,42 @@ export function ChatSidebar({
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent className="px-4 pb-4 space-y-4">
+              {/* Agentic Mode Toggle */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">Agentic Mode</span>
+                    {useAgenticMode && <Badge variant="secondary" className="text-xs">Beta</Badge>}
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={toggleChatMode}
+                    className="h-6 w-12 p-0 rounded-full relative bg-muted"
+                  >
+                    {useAgenticMode ? (
+                      <>
+                        <div className="absolute left-0.5 top-0.5 w-5 h-5 bg-purple-500 rounded-full transition-all duration-200" />
+                        <Zap className="h-3 w-3 text-white relative z-10" />
+                      </>
+                    ) : (
+                      <>
+                        <div className="absolute right-0.5 top-0.5 w-5 h-5 bg-gray-400 rounded-full transition-all duration-200" />
+                        <Bot className="h-3 w-3 text-white relative z-10" />
+                      </>
+                    )}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {useAgenticMode 
+                    ? "AI uses tools and multi-stage reasoning for better answers"
+                    : "Standard chat mode"
+                  }
+                </p>
+              </div>
+
+              <Separator />
+
               {/* Model Selector */}
               <div className="space-y-3">
                 <ModelSelector
@@ -344,7 +424,7 @@ export function ChatSidebar({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={clearCurrentChat}
+                    onClick={handleClearChat}
                     className="w-full justify-start"
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -395,61 +475,126 @@ export function ChatSidebar({
             style={{ height: 'calc(100vh - 280px)' }}
           >
             <div className="px-3 py-10 space-y-4 pb-4 w-full">
-              {messages.length === 0 ? (
+              {currentMessages.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-full min-h-[300px] text-center space-y-6 px-4">
                   <div className="relative">
-                    <div className="w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center border border-primary/20">
-                      <Sparkles className="h-8 w-8 text-primary" />
+                    <div className={cn(
+                      "w-16 h-16 mx-auto rounded-2xl bg-gradient-to-br flex items-center justify-center border",
+                      useAgenticMode 
+                        ? "from-purple-600/20 to-purple-600/10 border-purple-600/20" 
+                        : "from-primary/20 to-primary/10 border-primary/20"
+                    )}>
+                      {useAgenticMode ? (
+                        <Zap className="h-8 w-8 text-purple-600" />
+                      ) : (
+                        <Sparkles className="h-8 w-8 text-primary" />
+                      )}
                     </div>
                     <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-500 rounded-full animate-pulse" />
                   </div>
                   <div className="space-y-3 max-w-[280px]">
-                    <h3 className="font-semibold text-lg text-foreground">Ready to help!</h3>
+                    <h3 className="font-semibold text-lg text-foreground">
+                      {useAgenticMode ? "Agentic AI Ready!" : "Ready to help!"}
+                    </h3>
                     <p className="text-sm text-muted-foreground leading-relaxed">
-                      Ask me anything about this repository - code structure, functionality, best
-                      practices, or specific implementations.
+                      {useAgenticMode 
+                        ? "I'll use multiple search tools and reasoning steps to give you comprehensive answers about this repository."
+                        : "Ask me anything about this repository - code structure, functionality, best practices, or specific implementations."
+                      }
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2 justify-center">
-                    <Badge variant="secondary" className="text-xs">
-                      Code Analysis
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs">
-                      Architecture
-                    </Badge>
-                    <Badge variant="secondary" className="text-xs">
-                      Documentation
-                    </Badge>
+                    {useAgenticMode ? (
+                      <>
+                        <Badge variant="secondary" className="text-xs">
+                          Multi-Tool Search
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Reasoning Steps
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Smart Context
+                        </Badge>
+                      </>
+                    ) : (
+                      <>
+                        <Badge variant="secondary" className="text-xs">
+                          Code Analysis
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Architecture
+                        </Badge>
+                        <Badge variant="secondary" className="text-xs">
+                          Documentation
+                        </Badge>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : (
                 <>
-                  {messages.map((message, index) => (
-                    <div
-                      key={`${index}-${message.timestamp.getTime()}`}
-                      className="w-full space-y-2"
-                    >
-                      <ChatMessage message={message} />
-                      {/* Show context indicator for assistant messages with context metadata */}
-                      {message.role === 'assistant' && message.context_metadata && (
-                        <div className="ml-2 mr-1">
-                          <ContextIndicator
-                            contextMetadata={message.context_metadata as ContextMetadata}
-                            className="text-xs"
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                  {useAgenticMode ? (
+                    // Agentic Messages
+                    currentMessages.map((message, index) => (
+                      <AgenticChatMessage
+                        key={`agentic-${index}-${message.timestamp.getTime()}`}
+                        message={message}
+                        toolCalls={agenticToolCalls}
+                        isStreaming={currentIsLoading && index === currentMessages.length - 1}
+                      />
+                    ))
+                  ) : (
+                    // Regular Messages
+                    currentMessages.map((message, index) => (
+                      <div
+                        key={`regular-${index}-${message.timestamp.getTime()}`}
+                        className="w-full space-y-2"
+                      >
+                        <ChatMessage message={message} />
+                        {/* Show context indicator for assistant messages with context metadata */}
+                        {message.role === 'assistant' && message.context_metadata && (
+                          <div className="ml-2 mr-1">
+                            <ContextIndicator
+                              contextMetadata={message.context_metadata as ContextMetadata}
+                              className="text-xs"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  )}
 
-                  {isLoading && (
+                  {/* Show streaming content for agentic mode */}
+                  {useAgenticMode && agenticStreamingContent && (
+                    <AgenticChatMessage
+                      message={{
+                        role: 'assistant',
+                        content: agenticStreamingContent,
+                        timestamp: new Date(),
+                      }}
+                      isStreaming={true}
+                    />
+                  )}
+
+                  {currentIsLoading && (
                     <div className="flex items-center gap-3 p-3 rounded-2xl bg-muted/30 border border-border/30 mx-1">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      <div className={cn(
+                        "w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0",
+                        useAgenticMode ? "bg-purple-600/10" : "bg-primary/10"
+                      )}>
+                        {useAgenticMode ? (
+                          <Brain className="h-4 w-4 animate-pulse text-purple-600" />
+                        ) : (
+                          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                        )}
                       </div>
                       <div className="space-y-1 min-w-0 flex-1">
-                        <p className="text-sm font-medium text-foreground">AI is thinking...</p>
-                        <p className="text-xs text-muted-foreground">Analyzing your question</p>
+                        <p className="text-sm font-medium text-foreground">
+                          {useAgenticMode ? "AI is reasoning..." : "AI is thinking..."}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {useAgenticMode ? "Using tools to analyze your question" : "Analyzing your question"}
+                        </p>
                       </div>
                     </div>
                   )}
@@ -470,19 +615,29 @@ export function ChatSidebar({
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   onKeyPress={handleKeyPress}
-                  placeholder="Ask about the repository..."
-                  disabled={isLoading}
+                  placeholder={useAgenticMode 
+                    ? "Ask anything - I'll use tools to find the best answer..."
+                    : "Ask about the repository..."
+                  }
+                  disabled={currentIsLoading}
                   className="pr-12 h-11 rounded-xl border-border/50 focus:border-primary/50 focus:ring-primary/20"
                 />
               </div>
               <Button
                 onClick={handleSendMessage}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim() || currentIsLoading}
                 size="icon"
-                className="h-11 w-11 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-50"
+                className={cn(
+                  "h-11 w-11 rounded-xl disabled:opacity-50",
+                  useAgenticMode 
+                    ? "bg-purple-600 hover:bg-purple-700" 
+                    : "bg-primary hover:bg-primary/90"
+                )}
               >
-                {isLoading ? (
+                {currentIsLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : useAgenticMode ? (
+                  <Zap className="h-4 w-4" />
                 ) : (
                   <Send className="h-4 w-4" />
                 )}

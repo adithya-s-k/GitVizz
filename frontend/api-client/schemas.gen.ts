@@ -243,6 +243,148 @@ export const Body_generate_structure_endpoint_api_repo_generate_structure_postSc
   title: 'Body_generate_structure_endpoint_api_repo_generate_structure_post',
 } as const;
 
+export const Body_generate_subgraph_endpoint_api_repo_generate_subgraph_postSchema = {
+  properties: {
+    repo_url: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Repo Url',
+      description: 'URL to a downloadable ZIP of the repository.',
+    },
+    branch: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Branch',
+      description: 'Branch for GitHub repo URL.',
+      default: 'main',
+    },
+    access_token: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Access Token',
+      description: 'Optional GitHub token.',
+    },
+    jwt_token: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Jwt Token',
+      description: 'Optional JWT token.',
+    },
+    center_node_id: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Center Node Id',
+      description: 'Center node id for ego network.',
+    },
+    depth: {
+      anyOf: [
+        {
+          type: 'integer',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Depth',
+      description: 'Traversal depth for ego network.',
+      default: 1,
+    },
+    categories: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Categories',
+      description: 'Comma-separated categories filter.',
+    },
+    directories: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Directories',
+      description: 'Comma-separated directory prefixes filter.',
+    },
+    relationship_types: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Relationship Types',
+      description: 'Comma-separated relationship types filter.',
+    },
+    min_degree: {
+      anyOf: [
+        {
+          type: 'integer',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Min Degree',
+      description: 'Minimum degree for nodes.',
+    },
+    limit: {
+      anyOf: [
+        {
+          type: 'integer',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Limit',
+      description: 'Max nodes in subgraph.',
+      default: 500,
+    },
+  },
+  type: 'object',
+  title: 'Body_generate_subgraph_endpoint_api_repo_generate_subgraph_post',
+} as const;
+
 export const Body_generate_text_endpoint_api_repo_generate_text_postSchema = {
   properties: {
     repo_url: {
@@ -615,6 +757,12 @@ export const Body_save_user_api_key_api_backend_chat_keys_save_postSchema = {
       title: 'Key Name',
       description: 'Friendly name for the key',
     },
+    verify_key: {
+      type: 'boolean',
+      title: 'Verify Key',
+      description: 'Whether to verify the key before saving',
+      default: true,
+    },
   },
   type: 'object',
   required: ['token', 'provider', 'api_key'],
@@ -650,6 +798,93 @@ export const Body_search_context_api_backend_chat_context_search_postSchema = {
   type: 'object',
   required: ['token', 'repository_id', 'query'],
   title: 'Body_search_context_api_backend_chat_context_search_post',
+} as const;
+
+export const Body_stream_agentic_chat_response_api_backend_chat_agentic_stream_postSchema = {
+  properties: {
+    token: {
+      type: 'string',
+      title: 'Token',
+      description: 'JWT authentication token',
+    },
+    message: {
+      type: 'string',
+      title: 'Message',
+      description: "User's message/question",
+    },
+    repository_id: {
+      type: 'string',
+      title: 'Repository Id',
+      description: 'Repository ID to chat about',
+    },
+    use_user: {
+      type: 'boolean',
+      title: 'Use User',
+      description: "Whether to use the user's saved API key",
+      default: false,
+    },
+    chat_id: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Chat Id',
+      description: 'Chat session ID',
+    },
+    conversation_id: {
+      anyOf: [
+        {
+          type: 'string',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Conversation Id',
+      description: 'Conversation thread ID',
+    },
+    provider: {
+      type: 'string',
+      title: 'Provider',
+      description: 'LLM provider (openai, anthropic, gemini)',
+      default: 'openai',
+    },
+    model: {
+      type: 'string',
+      title: 'Model',
+      description: 'Model name',
+      default: 'gpt-4',
+    },
+    temperature: {
+      type: 'number',
+      maximum: 2,
+      minimum: 0,
+      title: 'Temperature',
+      description: 'Response randomness (0.0-2.0)',
+      default: 0.7,
+    },
+    max_tokens: {
+      anyOf: [
+        {
+          type: 'integer',
+          maximum: 8000,
+          minimum: 1,
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Max Tokens',
+      description: 'Maximum tokens in response (1-8000)',
+    },
+  },
+  type: 'object',
+  required: ['token', 'message', 'repository_id'],
+  title: 'Body_stream_agentic_chat_response_api_backend_chat_agentic_stream_post',
 } as const;
 
 export const Body_stream_chat_response_api_backend_chat_chat_stream_postSchema = {
@@ -825,6 +1060,29 @@ export const Body_update_chat_settings_api_backend_chat_settings_postSchema = {
   title: 'Body_update_chat_settings_api_backend_chat_settings_post',
 } as const;
 
+export const Body_verify_user_api_key_api_backend_chat_keys_verify_postSchema = {
+  properties: {
+    token: {
+      type: 'string',
+      title: 'Token',
+      description: 'JWT authentication token',
+    },
+    provider: {
+      type: 'string',
+      title: 'Provider',
+      description: 'Provider name (openai, anthropic, gemini)',
+    },
+    api_key: {
+      type: 'string',
+      title: 'Api Key',
+      description: 'API key to verify',
+    },
+  },
+  type: 'object',
+  required: ['token', 'provider', 'api_key'],
+  title: 'Body_verify_user_api_key_api_backend_chat_keys_verify_post',
+} as const;
+
 export const ChatResponseSchema = {
   properties: {
     success: {
@@ -893,6 +1151,19 @@ export const ChatResponseSchema = {
         },
       ],
       title: 'Context Used',
+    },
+    context_metadata: {
+      anyOf: [
+        {
+          additionalProperties: true,
+          type: 'object',
+        },
+        {
+          type: 'null',
+        },
+      ],
+      title: 'Context Metadata',
+      description: 'Smart context selection metadata',
     },
     usage: {
       anyOf: [

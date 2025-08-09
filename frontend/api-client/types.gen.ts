@@ -118,6 +118,67 @@ export type BodyGenerateStructureEndpointApiRepoGenerateStructurePost = {
 };
 
 /**
+ * Body_generate_subgraph_endpoint_api_repo_generate_subgraph_post
+ */
+export type BodyGenerateSubgraphEndpointApiRepoGenerateSubgraphPost = {
+  /**
+   * Repo Url
+   * URL to a downloadable ZIP of the repository.
+   */
+  repo_url?: string | null;
+  /**
+   * Branch
+   * Branch for GitHub repo URL.
+   */
+  branch?: string | null;
+  /**
+   * Access Token
+   * Optional GitHub token.
+   */
+  access_token?: string | null;
+  /**
+   * Jwt Token
+   * Optional JWT token.
+   */
+  jwt_token?: string | null;
+  /**
+   * Center Node Id
+   * Center node id for ego network.
+   */
+  center_node_id?: string | null;
+  /**
+   * Depth
+   * Traversal depth for ego network.
+   */
+  depth?: number | null;
+  /**
+   * Categories
+   * Comma-separated categories filter.
+   */
+  categories?: string | null;
+  /**
+   * Directories
+   * Comma-separated directory prefixes filter.
+   */
+  directories?: string | null;
+  /**
+   * Relationship Types
+   * Comma-separated relationship types filter.
+   */
+  relationship_types?: string | null;
+  /**
+   * Min Degree
+   * Minimum degree for nodes.
+   */
+  min_degree?: number | null;
+  /**
+   * Limit
+   * Max nodes in subgraph.
+   */
+  limit?: number | null;
+};
+
+/**
  * Body_generate_text_endpoint_api_repo_generate_text_post
  */
 export type BodyGenerateTextEndpointApiRepoGenerateTextPost = {
@@ -366,6 +427,11 @@ export type BodySaveUserApiKeyApiBackendChatKeysSavePost = {
    * Friendly name for the key
    */
   key_name?: string | null;
+  /**
+   * Verify Key
+   * Whether to verify the key before saving
+   */
+  verify_key?: boolean;
 };
 
 /**
@@ -392,6 +458,62 @@ export type BodySearchContextApiBackendChatContextSearchPost = {
    * Maximum number of results (1-20)
    */
   max_results?: number;
+};
+
+/**
+ * Body_stream_agentic_chat_response_api_backend_chat_agentic_stream_post
+ */
+export type BodyStreamAgenticChatResponseApiBackendChatAgenticStreamPost = {
+  /**
+   * Token
+   * JWT authentication token
+   */
+  token: string;
+  /**
+   * Message
+   * User's message/question
+   */
+  message: string;
+  /**
+   * Repository Id
+   * Repository ID to chat about
+   */
+  repository_id: string;
+  /**
+   * Use User
+   * Whether to use the user's saved API key
+   */
+  use_user?: boolean;
+  /**
+   * Chat Id
+   * Chat session ID
+   */
+  chat_id?: string | null;
+  /**
+   * Conversation Id
+   * Conversation thread ID
+   */
+  conversation_id?: string | null;
+  /**
+   * Provider
+   * LLM provider (openai, anthropic, gemini)
+   */
+  provider?: string;
+  /**
+   * Model
+   * Model name
+   */
+  model?: string;
+  /**
+   * Temperature
+   * Response randomness (0.0-2.0)
+   */
+  temperature?: number;
+  /**
+   * Max Tokens
+   * Maximum tokens in response (1-8000)
+   */
+  max_tokens?: number | null;
 };
 
 /**
@@ -497,6 +619,27 @@ export type BodyUpdateChatSettingsApiBackendChatSettingsPost = {
 };
 
 /**
+ * Body_verify_user_api_key_api_backend_chat_keys_verify_post
+ */
+export type BodyVerifyUserApiKeyApiBackendChatKeysVerifyPost = {
+  /**
+   * Token
+   * JWT authentication token
+   */
+  token: string;
+  /**
+   * Provider
+   * Provider name (openai, anthropic, gemini)
+   */
+  provider: string;
+  /**
+   * Api Key
+   * API key to verify
+   */
+  api_key: string;
+};
+
+/**
  * ChatResponse
  * Response model for non-streaming chat interactions
  */
@@ -533,6 +676,13 @@ export type ChatResponse = {
    * Context Used
    */
   context_used?: string | null;
+  /**
+   * Context Metadata
+   * Smart context selection metadata
+   */
+  context_metadata?: {
+    [key: string]: unknown;
+  } | null;
   usage?: TokenUsage | null;
   /**
    * Model Used
@@ -1334,6 +1484,49 @@ export type GenerateGraphEndpointApiRepoGenerateGraphPostResponses = {
 export type GenerateGraphEndpointApiRepoGenerateGraphPostResponse =
   GenerateGraphEndpointApiRepoGenerateGraphPostResponses[keyof GenerateGraphEndpointApiRepoGenerateGraphPostResponses];
 
+export type GenerateSubgraphEndpointApiRepoGenerateSubgraphPostData = {
+  body?: BodyGenerateSubgraphEndpointApiRepoGenerateSubgraphPost;
+  path?: never;
+  query?: never;
+  url: '/api/repo/generate-subgraph';
+};
+
+export type GenerateSubgraphEndpointApiRepoGenerateSubgraphPostErrors = {
+  /**
+   * Invalid input.
+   */
+  400: ErrorResponse;
+  /**
+   * Invalid or expired JWT token.
+   */
+  401: ErrorResponse;
+  /**
+   * Repository not found or no graph available.
+   */
+  404: ErrorResponse;
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+  /**
+   * Server error during subgraph generation.
+   */
+  500: ErrorResponse;
+};
+
+export type GenerateSubgraphEndpointApiRepoGenerateSubgraphPostError =
+  GenerateSubgraphEndpointApiRepoGenerateSubgraphPostErrors[keyof GenerateSubgraphEndpointApiRepoGenerateSubgraphPostErrors];
+
+export type GenerateSubgraphEndpointApiRepoGenerateSubgraphPostResponses = {
+  /**
+   * Subgraph data as JSON.
+   */
+  200: GraphResponse;
+};
+
+export type GenerateSubgraphEndpointApiRepoGenerateSubgraphPostResponse =
+  GenerateSubgraphEndpointApiRepoGenerateSubgraphPostResponses[keyof GenerateSubgraphEndpointApiRepoGenerateSubgraphPostResponses];
+
 export type GenerateStructureEndpointApiRepoGenerateStructurePostData = {
   body?: BodyGenerateStructureEndpointApiRepoGenerateStructurePost;
   path?: never;
@@ -1499,6 +1692,42 @@ export type StreamChatResponseApiBackendChatChatStreamPostResponses = {
   200: unknown;
 };
 
+export type StreamAgenticChatResponseApiBackendChatAgenticStreamPostData = {
+  body: BodyStreamAgenticChatResponseApiBackendChatAgenticStreamPost;
+  path?: never;
+  query?: never;
+  url: '/api/backend-chat/agentic/stream';
+};
+
+export type StreamAgenticChatResponseApiBackendChatAgenticStreamPostErrors = {
+  /**
+   * Unauthorized - Invalid JWT token
+   */
+  401: ErrorResponse;
+  /**
+   * Repository or chat session not found
+   */
+  404: ErrorResponse;
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+  /**
+   * Internal server error
+   */
+  500: ErrorResponse;
+};
+
+export type StreamAgenticChatResponseApiBackendChatAgenticStreamPostError =
+  StreamAgenticChatResponseApiBackendChatAgenticStreamPostErrors[keyof StreamAgenticChatResponseApiBackendChatAgenticStreamPostErrors];
+
+export type StreamAgenticChatResponseApiBackendChatAgenticStreamPostResponses = {
+  /**
+   * Successful agentic streaming response
+   */
+  200: unknown;
+};
+
 export type GetConversationHistoryApiBackendChatConversationsConversationIdPostData = {
   body: BodyGetConversationHistoryApiBackendChatConversationsConversationIdPost;
   path: {
@@ -1622,6 +1851,48 @@ export type GetChatSessionApiBackendChatSessionsChatIdPostResponses = {
 export type GetChatSessionApiBackendChatSessionsChatIdPostResponse =
   GetChatSessionApiBackendChatSessionsChatIdPostResponses[keyof GetChatSessionApiBackendChatSessionsChatIdPostResponses];
 
+export type VerifyUserApiKeyApiBackendChatKeysVerifyPostData = {
+  body: BodyVerifyUserApiKeyApiBackendChatKeysVerifyPost;
+  path?: never;
+  query?: never;
+  url: '/api/backend-chat/keys/verify';
+};
+
+export type VerifyUserApiKeyApiBackendChatKeysVerifyPostErrors = {
+  /**
+   * Invalid provider specified
+   */
+  400: ErrorResponse;
+  /**
+   * Unauthorized - Invalid JWT token
+   */
+  401: ErrorResponse;
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+  /**
+   * Internal server error
+   */
+  500: ErrorResponse;
+};
+
+export type VerifyUserApiKeyApiBackendChatKeysVerifyPostError =
+  VerifyUserApiKeyApiBackendChatKeysVerifyPostErrors[keyof VerifyUserApiKeyApiBackendChatKeysVerifyPostErrors];
+
+export type VerifyUserApiKeyApiBackendChatKeysVerifyPostResponses = {
+  /**
+   * Response Verify User Api Key Api Backend Chat Keys Verify Post
+   * API key verification result
+   */
+  200: {
+    [key: string]: unknown;
+  };
+};
+
+export type VerifyUserApiKeyApiBackendChatKeysVerifyPostResponse =
+  VerifyUserApiKeyApiBackendChatKeysVerifyPostResponses[keyof VerifyUserApiKeyApiBackendChatKeysVerifyPostResponses];
+
 export type SaveUserApiKeyApiBackendChatKeysSavePostData = {
   body: BodySaveUserApiKeyApiBackendChatKeysSavePost;
   path?: never;
@@ -1631,7 +1902,7 @@ export type SaveUserApiKeyApiBackendChatKeysSavePostData = {
 
 export type SaveUserApiKeyApiBackendChatKeysSavePostErrors = {
   /**
-   * Invalid provider specified
+   * Invalid provider or API key specified
    */
   400: ErrorResponse;
   /**

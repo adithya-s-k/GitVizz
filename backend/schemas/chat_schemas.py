@@ -10,6 +10,10 @@ class StreamEventType(str, Enum):
     TOKEN = "token"
     COMPLETE = "complete"
     ERROR = "error"
+    AGENT_THINKING = "agent_thinking"
+    TOOL_CALL_START = "tool_call_start"
+    TOOL_CALL_PROGRESS = "tool_call_progress"
+    TOOL_CALL_RESULT = "tool_call_result"
 
 
 class ModelProvider(str, Enum):
@@ -70,6 +74,11 @@ class StreamChatResponse(BaseModel):
     chat_id: Optional[str] = Field(None, description="Chat session ID")
     conversation_id: Optional[str] = Field(None, description="Conversation thread ID")
     context_metadata: Optional[Dict[str, Any]] = Field(None, description="Smart context selection metadata")
+    
+    # Agentic features
+    content: Optional[str] = Field(None, description="General content for thinking/progress events")
+    tool_name: Optional[str] = Field(None, description="Name of tool being called")
+    tool_result: Optional[Dict[str, Any]] = Field(None, description="Result from tool execution")
 
 
 # Chat Request Models

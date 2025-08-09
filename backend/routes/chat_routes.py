@@ -8,6 +8,7 @@ from schemas.chat_schemas import (
     ContextSearchResponse, ChatSessionListResponse
 )
 from controllers.chat_controller import chat_controller
+from controllers.agentic_chat_controller import agentic_chat_controller
 from schemas.response_schemas import ErrorResponse
 
 router = APIRouter(prefix="/backend-chat")
@@ -128,6 +129,59 @@ async def stream_chat_response(
             max_tokens=max_tokens,
             include_full_context=include_full_context,
             context_search_query=context_search_query
+        ),
+        media_type="application/x-ndjson"
+    )
+
+# Agentic streaming chat endpoint
+@router.post(
+    "/agentic/stream",
+    summary="Agentic streaming chat with tool calling",
+    description="Process chat with intelligent multi-stage retrieval and tool calling",
+    response_description="Stream of agentic chat events (thinking, tool calls, results, tokens)",
+    responses={
+        200: {
+            "description": "Successful agentic streaming response",
+            "content": {"application/x-ndjson": {}}
+        },
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized - Invalid JWT token"
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "Repository or chat session not found"
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Internal server error"
+        }
+    }
+)
+async def stream_agentic_chat_response(
+    token: Annotated[str, Form(description="JWT authentication token")],
+    message: Annotated[str, Form(description="User's message/question")],
+    repository_id: Annotated[str, Form(description="Repository ID to chat about")],
+    use_user: Annotated[bool, Form(description="Whether to use the user's saved API key")] = False,
+    chat_id: Annotated[Optional[str], Form(description="Chat session ID")] = None,
+    conversation_id: Annotated[Optional[str], Form(description="Conversation thread ID")] = None,
+    provider: Annotated[str, Form(description="LLM provider (openai, anthropic, gemini)")] = "openai",
+    model: Annotated[str, Form(description="Model name")] = "gpt-4",
+    temperature: Annotated[float, Form(description="Response randomness (0.0-2.0)", ge=0.0, le=2.0)] = 0.7,
+    max_tokens: Annotated[Optional[int], Form(description="Maximum tokens in response (1-8000)", ge=1, le=8000)] = None
+):
+    return StreamingResponse(
+        agentic_chat_controller.process_agentic_streaming_chat(
+            token=token,
+            message=message,
+            repository_id=repository_id,
+            use_user=use_user,
+            chat_id=chat_id,
+            conversation_id=conversation_id,
+            provider=provider,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens
         ),
         media_type="application/x-ndjson"
     )

@@ -619,6 +619,135 @@ Instructions:
             print(f"Error getting valid models for {provider}: {e}")
             return []
 
+    async def generate_response_with_functions(
+        self,
+        user: User,
+        use_user: bool,
+        messages: List[Dict],
+        functions: List[Dict],
+        provider: str = "openai",
+        model: str = "gpt-4",
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        stream: bool = True
+    ) -> AsyncGenerator[Dict, None]:
+        """Generate response with function calling support"""
+        
+        try:
+            litellm = get_litellm()
+            
+            # Get API key
+            api_key = await self.get_api_key_for_request(user, provider, use_user)
+            if not api_key:
+                yield {"type": "error", "error": f"No API key available for {provider}"}
+                return
+                
+            # Get the correct model name
+            model_name = self.get_model_name_for_provider(provider, model)
+            
+            # Prepare LiteLLM parameters
+            litellm_params = {
+                "model": model_name,
+                "messages": messages,
+                "api_key": api_key,
+                "temperature": temperature,
+                "stream": stream,
+                "functions": functions if provider == "openai" else None,
+                "tools": [{"type": "function", "function": func} for func in functions] if provider != "openai" else None
+            }
+            
+            if max_tokens:
+                litellm_params["max_tokens"] = max_tokens
+                
+            # Make the completion call
+            response = await litellm.acompletion(**litellm_params)
+            
+            if stream:
+                async for chunk in response:
+                    # Process streaming chunks
+                    if hasattr(chunk, 'choices') and len(chunk.choices) > 0:
+                        choice = chunk.choices[0]
+                        delta = choice.delta
+                        
+                        # Handle function calls
+                        if hasattr(delta, 'function_call') and delta.function_call:
+                            if delta.function_call.name:
+                                yield {
+                                    "type": "function_call_start",
+                                    "function_name": delta.function_call.name
+                                }
+                            if delta.function_call.arguments:
+                                yield {
+                                    "type": "function_call_arguments", 
+                                    "arguments": delta.function_call.arguments
+                                }
+                        
+                        # Handle tool calls (newer format)
+                        elif hasattr(delta, 'tool_calls') and delta.tool_calls:
+                            for tool_call in delta.tool_calls:
+                                if hasattr(tool_call, 'function'):
+                                    if tool_call.function.name:
+                                        yield {
+                                            "type": "function_call_start",
+                                            "function_name": tool_call.function.name
+                                        }
+                                    if tool_call.function.arguments:
+                                        yield {
+                                            "type": "function_call_arguments",
+                                            "arguments": tool_call.function.arguments
+                                        }
+                        
+                        # Handle regular content
+                        elif hasattr(delta, 'content') and delta.content:
+                            yield {
+                                "type": "token",
+                                "token": delta.content
+                            }
+                        
+                        # Handle completion
+                        if choice.finish_reason:
+                            if choice.finish_reason == "function_call":
+                                yield {"type": "function_call_end"}
+                            elif choice.finish_reason == "stop":
+                                yield {
+                                    "type": "complete",
+                                    "usage": getattr(chunk, 'usage', {})
+                                }
+            else:
+                # Non-streaming response
+                if hasattr(response, 'choices') and len(response.choices) > 0:
+                    choice = response.choices[0]
+                    
+                    if hasattr(choice, 'message') and hasattr(choice.message, 'function_call'):
+                        # Function call response
+                        yield {
+                            "type": "function_call_start",
+                            "function_name": choice.message.function_call.name
+                        }
+                        yield {
+                            "type": "function_call_arguments",
+                            "arguments": choice.message.function_call.arguments
+                        }
+                        yield {"type": "function_call_end"}
+                    else:
+                        # Regular response
+                        content = choice.message.content if hasattr(choice.message, 'content') else ""
+                        yield {
+                            "type": "token",
+                            "token": content
+                        }
+                        yield {
+                            "type": "complete",
+                            "usage": getattr(response, 'usage', {})
+                        }
+                        
+        except Exception as e:
+            yield {
+                "type": "error",
+                "error": str(e),
+                "error_type": "llm_error"
+            }
+
 
 # Global instance
 llm_service = LLMService()
