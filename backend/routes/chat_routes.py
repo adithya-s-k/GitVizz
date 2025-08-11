@@ -377,6 +377,53 @@ async def update_chat_settings(
         default_temperature=default_temperature
     )
 
+# ReAct Agent streaming chat endpoint
+@router.post(
+    "/chat/react-agent",
+    summary="Stream ReAct agent chat response",
+    description="Process a chat message using intelligent ReAct agent that explores the codebase systematically",
+    response_description="Stream of agent reasoning, actions, observations and final response",
+    responses={
+        200: {
+            "description": "Successful streaming agent response",
+            "content": {"application/x-ndjson": {}}
+        },
+        401: {
+            "model": ErrorResponse,
+            "description": "Unauthorized - Invalid JWT token"
+        },
+        404: {
+            "model": ErrorResponse,
+            "description": "Repository not found or no graph data available"
+        },
+        500: {
+            "model": ErrorResponse,
+            "description": "Internal server error"
+        }
+    }
+)
+async def react_agent_chat(
+    token: Annotated[str, Form(description="JWT authentication token")],
+    message: Annotated[str, Form(description="User's message/question")],
+    repository_id: Annotated[str, Form(description="Repository ID to chat about")],
+    repository_branch: Annotated[Optional[str], Form(description="Repository branch for more precise matching")] = None,
+    chat_id: Annotated[Optional[str], Form(description="Chat session ID (auto-generated if not provided)")] = None,
+    conversation_id: Annotated[Optional[str], Form(description="Conversation thread ID (auto-generated if not provided)")] = None,
+    max_iterations: Annotated[int, Form(description="Maximum agent iterations (1-10)", ge=1, le=10)] = 5
+):
+    return StreamingResponse(
+        chat_controller.process_react_agent_chat(
+            token=token,
+            message=message,
+            repository_id=repository_id,
+            repository_branch=repository_branch,
+            chat_id=chat_id,
+            conversation_id=conversation_id,
+            max_iterations=max_iterations
+        ),
+        media_type="application/x-ndjson"
+    )
+
 # Context search endpoint
 @router.post(
     "/context/search",

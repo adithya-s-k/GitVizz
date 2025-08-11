@@ -15,6 +15,8 @@ from utils.file_utils import file_manager
 from utils.jwt_utils import get_current_user
 from utils.repo_utils import extract_zip_contents, smart_filter_files, format_repo_contents, cleanup_temp_files
 from utils.repo_utils import find_user_repository
+from utils.graph_utils import GraphUtils
+from utils.react_agent import get_react_agent
 from schemas.chat_schemas import (
     ChatResponse, ConversationHistoryResponse, 
     ChatSessionResponse, ApiKeyResponse,
@@ -212,6 +214,30 @@ class ChatController:
             # Clean up temporary directories
             if temp_dirs_to_cleanup:
                 cleanup_temp_files(temp_dirs_to_cleanup)
+
+    async def load_repository_graph(self, repository: Repository) -> Optional[GraphUtils]:
+        """Load graph data for repository if available"""
+        try:
+            if not repository.file_paths or not repository.file_paths.graph:
+                logger.warning(f"No graph file available for repository {repository.repo_name}")
+                return None
+            
+            graph_file_path = repository.file_paths.graph
+            if not os.path.exists(graph_file_path):
+                logger.warning(f"Graph file not found: {graph_file_path}")
+                return None
+            
+            graph_utils = GraphUtils()
+            if graph_utils.load_graph_from_file(graph_file_path):
+                logger.info(f"Successfully loaded graph for {repository.repo_name}")
+                return graph_utils
+            else:
+                logger.error(f"Failed to load graph from {graph_file_path}")
+                return None
+                
+        except Exception as e:
+            logger.error(f"Error loading repository graph: {e}")
+            return None
 
     async def get_api_key_for_request(self, user: User, provider: str, use_user: bool = False) -> Optional[str]:
         """
@@ -710,7 +736,7 @@ Provide detailed, accurate responses based on the repository content. Reference 
             # Get all chat sessions for this repository
             chat_sessions = await ChatSession.find(
                 ChatSession.user.id == user_object_id,
-                ChatSession.is_active == True,
+                ChatSession.is_active,
                 ChatSession.repository.id == repository.id
             ).sort(-ChatSession.updated_at).to_list()
 
@@ -988,7 +1014,7 @@ Provide detailed, accurate responses based on the repository content. Reference 
             # Get user's keys
             user_keys = await UserApiKey.find(
                 UserApiKey.user.id == BeanieObjectId(user.id),
-                UserApiKey.is_active == True
+                UserApiKey.is_active
             ).to_list()
             
             user_has_keys = [key.provider for key in user_keys]
@@ -1070,6 +1096,181 @@ Provide detailed, accurate responses based on the repository content. Reference 
                 message=str(e)
             )
     
+    async def process_react_agent_chat(
+        self,
+        token: Annotated[str, Form(description="JWT authentication token")],
+        message: Annotated[str, Form(description="User's message/question")],
+        repository_id: Annotated[str, Form(description="Repository ID to chat about")],
+        repository_branch: Annotated[Optional[str], Form(description="Repository branch for more precise matching")] = None,
+        chat_id: Annotated[Optional[str], Form(description="Chat session ID (auto-generated if not provided)")] = None,
+        conversation_id: Annotated[Optional[str], Form(description="Conversation thread ID (auto-generated if not provided)")] = None,
+        max_iterations: Annotated[int, Form(description="Maximum agent iterations (1-10)", ge=1, le=10)] = 5
+    ) -> AsyncGenerator[str, None]:
+        """Process chat message using ReAct agent with streaming response"""
+        try:
+            # Authenticate user
+            user = await get_current_user(token)
+            if not user:
+                yield json.dumps(StreamChatResponse(
+                    event="error",
+                    error="Invalid JWT token",
+                    error_type="authentication_error"
+                ).model_dump()) + "\n"
+                return
+            
+            # Get or create chat session
+            chat_session = await self.get_or_create_chat_session(
+                user, 
+                repository_id,
+                repository_branch,
+                chat_id
+            )
+            
+            # Generate conversation ID if not provided
+            conversation_id = conversation_id or str(uuid.uuid4())
+            
+            # Get or create conversation
+            conversation = await Conversation.find_one(
+                Conversation.conversation_id == conversation_id,
+                Conversation.user.id == BeanieObjectId(user.id),
+                fetch_links=True
+            )
+            
+            if not conversation:
+                conversation = Conversation(
+                    user=user,
+                    repository=chat_session.repository,
+                    chat_id=chat_session.chat_id,
+                    conversation_id=conversation_id,
+                    title=f"Agent: {self.generate_conversation_title(message)}",
+                    model_provider="mixed",  # Agent uses multiple models
+                    model_name="react_agent",
+                    temperature=0.3,
+                    max_tokens=2000
+                )
+                await conversation.save()
+            
+            # Add user message to conversation
+            conversation.add_message("user", message)
+            
+            # Load repository graph data
+            graph_utils = await self.load_repository_graph(chat_session.repository)
+            
+            if not graph_utils:
+                yield json.dumps(StreamChatResponse(
+                    event="error",
+                    error="Repository graph data not available. ReAct agent requires graph analysis.",
+                    error_type="no_graph_data",
+                    chat_id=chat_session.chat_id,
+                    conversation_id=conversation_id
+                ).model_dump()) + "\n"
+                return
+            
+            # Initialize ReAct agent
+            agent = get_react_agent(graph_utils)
+            agent.max_iterations = max_iterations
+            
+            # Process query with streaming
+            full_response = ""
+            async for agent_chunk in agent.process_query_streaming(message):
+                # Convert agent response to chat stream format
+                if agent_chunk.type == "reasoning":
+                    yield json.dumps(StreamChatResponse(
+                        event="agent_reasoning",
+                        token=f"🤔 {agent_chunk.content}",
+                        chat_id=chat_session.chat_id,
+                        conversation_id=conversation_id,
+                        metadata={
+                            "iteration": agent_chunk.iteration,
+                            "confidence": agent_chunk.confidence
+                        }
+                    ).model_dump()) + "\n"
+                
+                elif agent_chunk.type == "action":
+                    yield json.dumps(StreamChatResponse(
+                        event="agent_action",
+                        token=f"🔍 {agent_chunk.content}",
+                        chat_id=chat_session.chat_id,
+                        conversation_id=conversation_id,
+                        metadata={
+                            "iteration": agent_chunk.iteration,
+                            "action": agent_chunk.action
+                        }
+                    ).model_dump()) + "\n"
+                
+                elif agent_chunk.type == "observation":
+                    yield json.dumps(StreamChatResponse(
+                        event="agent_observation",
+                        token=f"👁️ {agent_chunk.content[:200]}...",
+                        chat_id=chat_session.chat_id,
+                        conversation_id=conversation_id,
+                        metadata={
+                            "iteration": agent_chunk.iteration,
+                            "action_result": agent_chunk.action_result
+                        }
+                    ).model_dump()) + "\n"
+                
+                elif agent_chunk.type == "complete":
+                    full_response = agent_chunk.content
+                    
+                    # Add AI response to conversation
+                    conversation.add_message(
+                        "assistant",
+                        full_response,
+                        context_used="ReAct Agent Exploration",
+                        metadata={
+                            "agent_type": "react",
+                            "iterations": agent_chunk.iteration,
+                            "confidence": agent_chunk.confidence
+                        }
+                    )
+                    await conversation.save()
+                    
+                    # Stream the final response token by token
+                    for token in full_response.split():
+                        yield json.dumps(StreamChatResponse(
+                            event="token",
+                            token=token + " ",
+                            chat_id=chat_session.chat_id,
+                            conversation_id=conversation_id,
+                            provider="react_agent",
+                            model="react_agent"
+                        ).model_dump()) + "\n"
+                    
+                    # Final completion event
+                    yield json.dumps(StreamChatResponse(
+                        event="complete",
+                        provider="react_agent",
+                        model="react_agent",
+                        chat_id=chat_session.chat_id,
+                        conversation_id=conversation_id,
+                        metadata={
+                            "agent_type": "react",
+                            "iterations_used": agent_chunk.iteration,
+                            "confidence": agent_chunk.confidence
+                        }
+                    ).model_dump()) + "\n"
+                
+                elif agent_chunk.type == "error":
+                    yield json.dumps(StreamChatResponse(
+                        event="error",
+                        error=agent_chunk.error,
+                        error_type="agent_error",
+                        chat_id=chat_session.chat_id,
+                        conversation_id=conversation_id
+                    ).model_dump()) + "\n"
+                    break
+                    
+        except Exception as e:
+            logger.error(f"Error in ReAct agent chat: {e}")
+            yield json.dumps(StreamChatResponse(
+                event="error",
+                error=str(e),
+                error_type="server_error",
+                chat_id=chat_id or "",
+                conversation_id=conversation_id or ""
+            ).model_dump()) + "\n"
+
     async def search_context(
         self,
         token: Annotated[str, Form(description="JWT authentication token")],
