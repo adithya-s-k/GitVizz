@@ -41,15 +41,6 @@ import type {
   GetChatSessionApiBackendChatSessionsChatIdPostData,
   GetChatSessionApiBackendChatSessionsChatIdPostResponses,
   GetChatSessionApiBackendChatSessionsChatIdPostErrors,
-  VerifyApiKeyBackendEnhancedData,
-  VerifyApiKeyBackendEnhancedResponses,
-  VerifyApiKeyBackendEnhancedErrors,
-  SaveApiKeyBackendEnhancedData,
-  SaveApiKeyBackendEnhancedResponses,
-  SaveApiKeyBackendEnhancedErrors,
-  GetAvailableModelsApiBackendChatModelsPostData,
-  GetAvailableModelsApiBackendChatModelsPostResponses,
-  GetAvailableModelsApiBackendChatModelsPostErrors,
   UpdateChatSettingsApiBackendChatSettingsPostData,
   UpdateChatSettingsApiBackendChatSettingsPostResponses,
   UpdateChatSettingsApiBackendChatSettingsPostErrors,
@@ -77,6 +68,12 @@ import type {
   GetIndexedRepositoriesApiIndexedReposPostData,
   GetIndexedRepositoriesApiIndexedReposPostResponses,
   GetIndexedRepositoriesApiIndexedReposPostErrors,
+  VerifyApiKeyBackendEnhancedData,
+  VerifyApiKeyBackendEnhancedResponses,
+  VerifyApiKeyBackendEnhancedErrors,
+  SaveApiKeyBackendEnhancedData,
+  SaveApiKeyBackendEnhancedResponses,
+  SaveApiKeyBackendEnhancedErrors,
   GetUserApiKeysBackendEnhancedData,
   GetUserApiKeysBackendEnhancedResponses,
   GetUserApiKeysBackendEnhancedErrors,
@@ -381,72 +378,6 @@ export const getChatSessionApiBackendChatSessionsChatIdPost = <
 };
 
 /**
- * Verify API key
- * Verify if an API key is valid for a specific provider without saving it
- */
-export const verifyApiKeyBackendEnhanced = <ThrowOnError extends boolean = false>(
-  options: Options<VerifyApiKeyBackendEnhancedData, ThrowOnError>,
-) => {
-  return (options.client ?? _heyApiClient).post<
-    VerifyApiKeyBackendEnhancedResponses,
-    VerifyApiKeyBackendEnhancedErrors,
-    ThrowOnError
-  >({
-    ...urlSearchParamsBodySerializer,
-    url: '/api/backend-chat/keys/verify',
-    ...options,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...options.headers,
-    },
-  });
-};
-
-/**
- * Save user API key
- * Save an encrypted API key for the authenticated user
- */
-export const saveApiKeyBackendEnhanced = <ThrowOnError extends boolean = false>(
-  options: Options<SaveApiKeyBackendEnhancedData, ThrowOnError>,
-) => {
-  return (options.client ?? _heyApiClient).post<
-    SaveApiKeyBackendEnhancedResponses,
-    SaveApiKeyBackendEnhancedErrors,
-    ThrowOnError
-  >({
-    ...urlSearchParamsBodySerializer,
-    url: '/api/backend-chat/keys/save',
-    ...options,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...options.headers,
-    },
-  });
-};
-
-/**
- * Get available LLM models
- * Retrieve list of available models per provider and user's API key status
- */
-export const getAvailableModelsApiBackendChatModelsPost = <ThrowOnError extends boolean = false>(
-  options: Options<GetAvailableModelsApiBackendChatModelsPostData, ThrowOnError>,
-) => {
-  return (options.client ?? _heyApiClient).post<
-    GetAvailableModelsApiBackendChatModelsPostResponses,
-    GetAvailableModelsApiBackendChatModelsPostErrors,
-    ThrowOnError
-  >({
-    ...urlSearchParamsBodySerializer,
-    url: '/api/backend-chat/models',
-    ...options,
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      ...options.headers,
-    },
-  });
-};
-
-/**
  * Update chat settings
  * Update settings for a chat session (title, default model, etc.)
  */
@@ -651,6 +582,50 @@ export const getIndexedRepositoriesApiIndexedReposPost = <ThrowOnError extends b
     ...urlSearchParamsBodySerializer,
     responseTransformer: getIndexedRepositoriesApiIndexedReposPostResponseTransformer,
     url: '/api/indexed-repos/',
+    ...options,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...options.headers,
+    },
+  });
+};
+
+/**
+ * Verify API key
+ * Verify if an API key is valid for a specific provider without saving it
+ */
+export const verifyApiKeyBackendEnhanced = <ThrowOnError extends boolean = false>(
+  options: Options<VerifyApiKeyBackendEnhancedData, ThrowOnError>,
+) => {
+  return (options.client ?? _heyApiClient).post<
+    VerifyApiKeyBackendEnhancedResponses,
+    VerifyApiKeyBackendEnhancedErrors,
+    ThrowOnError
+  >({
+    ...urlSearchParamsBodySerializer,
+    url: '/api/backend-chat/keys/verify',
+    ...options,
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      ...options.headers,
+    },
+  });
+};
+
+/**
+ * Save user API key
+ * Save an encrypted API key for the authenticated user
+ */
+export const saveApiKeyBackendEnhanced = <ThrowOnError extends boolean = false>(
+  options: Options<SaveApiKeyBackendEnhancedData, ThrowOnError>,
+) => {
+  return (options.client ?? _heyApiClient).post<
+    SaveApiKeyBackendEnhancedResponses,
+    SaveApiKeyBackendEnhancedErrors,
+    ThrowOnError
+  >({
+    ...urlSearchParamsBodySerializer,
+    url: '/api/backend-chat/keys/save',
     ...options,
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded',

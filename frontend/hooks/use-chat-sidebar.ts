@@ -137,7 +137,20 @@ export function useChatSidebar(
     const targetProvider = provider || modelState.provider;
     const targetModel = model || modelState.model;
     
-    if (!targetProvider || !targetModel) return;
+    // Validate provider and model before making API call
+    if (!targetProvider || !targetModel || 
+        typeof targetProvider !== 'string' || typeof targetModel !== 'string' ||
+        targetProvider.trim() === '' || targetModel.trim() === '') {
+      console.log('Skipping model config load: invalid provider or model', { targetProvider, targetModel });
+      return;
+    }
+
+    // Validate that provider is one of the valid providers
+    const validProviders = ['openai', 'anthropic', 'gemini', 'groq'];
+    if (!validProviders.includes(targetProvider)) {
+      console.warn('Invalid provider for model config:', targetProvider);
+      return;
+    }
     
     setIsLoadingModelConfig(true);
     try {

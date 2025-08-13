@@ -10,8 +10,6 @@ import {
   streamChatResponseApiBackendChatChatStreamPost,
   getConversationHistoryApiBackendChatConversationsConversationIdPost,
   getChatSessionApiBackendChatSessionsChatIdPost,
-  saveUserApiKeyApiBackendChatKeysSavePost,
-  getAvailableModelsApiBackendChatModelsPost,
   updateChatSettingsApiBackendChatSettingsPost,
   searchContextApiBackendChatContextSearchPost,
   listUserChatSessionsApiBackendChatSessionsPost,
@@ -19,6 +17,12 @@ import {
   getWikiStatusApiDocumentationWikiStatusPost,
   listRepositoryDocsApiDocumentationRepositoryDocsPost,
   isWikiGeneratedApiDocumentationIsWikiGeneratedPost,
+  verifyApiKeyBackendEnhanced,
+  saveApiKeyBackendEnhanced,
+  getUserApiKeysBackendEnhanced,
+  deleteUserApiKeyBackendEnhanced,
+  getAvailableModelsBackendEnhanced,
+  getModelConfigBackendEnhanced,
 } from '../api-client/sdk.gen';
 
 import type {
@@ -712,27 +716,34 @@ export async function verifyApiKey(verifyRequest: {
   is_valid: boolean;
   message: string;
   available_models?: string[];
+  model_configs?: Array<{
+    name: string;
+    max_tokens: number;
+    max_output_tokens: number;
+    supports_function_calling: boolean;
+    supports_vision: boolean;
+    is_reasoning_model: boolean;
+    knowledge_cutoff: string | null;
+  }>;
 }> {
   try {
-    const formData = new FormData();
-    formData.append('token', verifyRequest.token);
-    formData.append('provider', verifyRequest.provider);
-    formData.append('api_key', verifyRequest.api_key);
-
-    // Use the proper backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
-    const response = await fetch(`${backendUrl}/api/backend-chat/keys/verify`, {
-      method: 'POST',
-      body: formData,
+    const response = await verifyApiKeyBackendEnhanced({
+      body: {
+        token: verifyRequest.token,
+        provider: verifyRequest.provider,
+        api_key: verifyRequest.api_key,
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`API verification failed: ${errorText}`);
+    if (response.error) {
+      throw new Error(extractErrorMessage(response.error, OperationType.TEXT));
     }
 
-    const data = await response.json();
-    return data;
+    if (!response.data) {
+      throw new Error('No verification data received');
+    }
+
+    return response.data;
   } catch (error) {
     handleApiError(error, OperationType.TEXT);
   }
@@ -743,40 +754,25 @@ export async function verifyApiKey(verifyRequest: {
  */
 export async function saveApiKey(apiKeyRequest: ApiKeyRequest): Promise<ApiKeyResponse> {
   try {
-    // Use manual form data to include verify_key parameter that might not be in generated types yet
-    const formData = new FormData();
-    formData.append('token', apiKeyRequest.token);
-    formData.append('provider', apiKeyRequest.provider);
-    formData.append('api_key', apiKeyRequest.api_key);
-    if (apiKeyRequest.key_name) {
-      formData.append('key_name', apiKeyRequest.key_name);
-    }
-    formData.append('verify_key', 'true'); // Always verify by default
-
-    // Use the proper backend URL
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
-    const response = await fetch(`${backendUrl}/api/backend-chat/keys/save`, {
-      method: 'POST',
-      body: formData,
+    const response = await saveApiKeyBackendEnhanced({
+      body: {
+        token: apiKeyRequest.token,
+        provider: apiKeyRequest.provider,
+        api_key: apiKeyRequest.api_key,
+        key_name: apiKeyRequest.key_name || null,
+        verify_key: true, // Always verify by default
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let errorMessage = `Failed to save API key: ${response.statusText}`;
-
-      try {
-        const errorJson = JSON.parse(errorText);
-        errorMessage = errorJson.detail || errorJson.message || errorMessage;
-      } catch {
-        // Use the text as is if it's not JSON
-        errorMessage = errorText || errorMessage;
-      }
-
-      throw new Error(errorMessage);
+    if (response.error) {
+      throw new Error(extractErrorMessage(response.error, OperationType.TEXT));
     }
 
-    const data = await response.json();
-    return data;
+    if (!response.data) {
+      throw new Error('No save response received');
+    }
+
+    return response.data;
   } catch (error) {
     handleApiError(error, OperationType.TEXT);
   }
@@ -787,7 +783,7 @@ export async function saveApiKey(apiKeyRequest: ApiKeyRequest): Promise<ApiKeyRe
  */
 export async function getAvailableModels(token: string): Promise<AvailableModelsResponse> {
   try {
-    const response = await getAvailableModelsApiBackendChatModelsPost({
+    const response = await getAvailableModelsBackendEnhanced({
       body: { token },
     });
 
@@ -821,22 +817,19 @@ export async function getUserApiKeys(token: string): Promise<{
   total_keys: number;
 }> {
   try {
-    const formData = new FormData();
-    formData.append('token', token);
-
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
-    const response = await fetch(`${backendUrl}/api/backend-chat/keys/list`, {
-      method: 'POST',
-      body: formData,
+    const response = await getUserApiKeysBackendEnhanced({
+      body: { token },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch API keys: ${errorText}`);
+    if (response.error) {
+      throw new Error(extractErrorMessage(response.error, OperationType.TEXT));
     }
 
-    const data = await response.json();
-    return data;
+    if (!response.data) {
+      throw new Error('No API keys data received');
+    }
+
+    return response.data;
   } catch (error) {
     handleApiError(error, OperationType.TEXT);
   }
@@ -856,26 +849,23 @@ export async function deleteUserApiKey(
   deleted_at: string;
 }> {
   try {
-    const formData = new FormData();
-    formData.append('token', token);
-    formData.append('provider', provider);
-    if (keyId) {
-      formData.append('key_id', keyId);
-    }
-
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
-    const response = await fetch(`${backendUrl}/api/backend-chat/keys/delete`, {
-      method: 'POST',
-      body: formData,
+    const response = await deleteUserApiKeyBackendEnhanced({
+      body: {
+        token,
+        provider,
+        key_id: keyId || null,
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to delete API key: ${errorText}`);
+    if (response.error) {
+      throw new Error(extractErrorMessage(response.error, OperationType.TEXT));
     }
 
-    const data = await response.json();
-    return data;
+    if (!response.data) {
+      throw new Error('No delete response received');
+    }
+
+    return response.data;
   } catch (error) {
     handleApiError(error, OperationType.TEXT);
   }
@@ -903,27 +893,66 @@ export async function getDetailedAvailableModels(token: string, provider?: strin
   total_models: number;
 }> {
   try {
-    const formData = new FormData();
-    formData.append('token', token);
-    if (provider) {
-      formData.append('provider', provider);
-    }
-
-    const backendUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
-    const response = await fetch(`${backendUrl}/api/backend-chat/models/available`, {
-      method: 'POST',
-      body: formData,
+    const response = await getAvailableModelsBackendEnhanced({
+      body: {
+        token,
+        provider: provider || null,
+      },
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Failed to fetch detailed models: ${errorText}`);
+    if (response.error) {
+      throw new Error(extractErrorMessage(response.error, OperationType.TEXT));
     }
 
-    const data = await response.json();
-    return data;
+    if (!response.data) {
+      throw new Error('No detailed models data received');
+    }
+
+    return response.data;
   } catch (error) {
     handleApiError(error, OperationType.TEXT);
+  }
+}
+
+/**
+ * Get model configuration for a specific model
+ */
+export async function getModelConfig(
+  provider: string,
+  model: string
+): Promise<{
+  success: boolean;
+  provider: string;
+  model: string;
+  config: {
+    max_tokens: number;
+    max_output_tokens: number;
+    cost_per_1M_input: number;
+    cost_per_1M_output: number;
+    cost_per_1M_cached_input: number;
+    supports_function_calling: boolean;
+    supports_vision: boolean;
+    knowledge_cutoff: string | null;
+    is_reasoning_model: boolean;
+  };
+}> {
+  try {
+    const response = await getModelConfigBackendEnhanced({
+      path: { provider, model },
+    });
+
+    if (response.error) {
+      throw new Error(extractErrorMessage(response.error, OperationType.TEXT));
+    }
+
+    if (!response.data) {
+      throw new Error('No model config data received');
+    }
+
+    return response.data;
+  } catch (error) {
+    handleApiError(error, OperationType.TEXT);
+    throw error; // Add explicit throw since handleApiError doesn't return never in this context
   }
 }
 

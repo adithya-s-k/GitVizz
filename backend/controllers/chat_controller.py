@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timedelta, timezone
 import logging
 from beanie import BeanieObjectId
-from models.chat import ChatSession, Conversation, UserApiKey
+from models.chat import ChatSession, Conversation
 from models.repository import Repository
 from models.user import User
 from utils.llm_utils import llm_service
@@ -17,7 +17,7 @@ from utils.repo_utils import extract_zip_contents, smart_filter_files, format_re
 from utils.repo_utils import find_user_repository
 from schemas.chat_schemas import (
     ChatResponse, ConversationHistoryResponse, 
-    ChatSessionResponse, ApiKeyResponse,
+    ChatSessionResponse,
     AvailableModelsResponse, ChatSettingsResponse,
     ContextSearchResponse, MessageResponse, StreamChatResponse, ChatSessionListItem, ChatSessionListResponse
 )
@@ -982,160 +982,8 @@ Provide detailed, accurate responses based on the repository content. Reference 
             raise HTTPException(status_code=500, detail=str(e))
         
     
-    async def verify_user_api_key(
-        self,
-        token: Annotated[str, Form(description="JWT authentication token")],
-        provider: Annotated[str, Form(description="Provider name (openai, anthropic, gemini, groq)")],
-        api_key: Annotated[str, Form(description="API key to verify")]
-    ) -> dict:
-        """Verify API key without saving it"""
-        try:
-            user = await get_current_user(token)
-            if not user:
-                raise HTTPException(status_code=401, detail="Invalid JWT token")
-            
-            # Validate provider
-            valid_providers = ["openai", "anthropic", "gemini", "groq"]
-            if provider not in valid_providers:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid provider. Valid providers: {', '.join(valid_providers)}"
-                )
-            
-            # Verify the API key
-            is_valid = llm_service.verify_api_key(provider, api_key)
-            
-            response = {
-                "success": True,
-                "provider": provider,
-                "is_valid": is_valid,
-                "message": "API key is valid" if is_valid else "API key is invalid"
-            }
-            
-            # Optionally get available models if key is valid
-            if is_valid:
-                try:
-                    available_models = llm_service.get_valid_models_for_provider(provider, api_key)
-                    response["available_models"] = available_models[:10]  # Limit to first 10 models
-                except Exception as e:
-                    logger.warning(f"Could not fetch models for {provider}: {e}")
-                    response["available_models"] = []
-            
-            return response
-            
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
 
-    async def save_user_api_key(
-        self,
-        token: Annotated[str, Form(description="JWT authentication token")],
-        provider: Annotated[str, Form(description="Provider name (openai, anthropic, gemini, groq)")],
-        api_key: Annotated[str, Form(description="API key")],
-        key_name: Annotated[Optional[str], Form(description="Friendly name for the key")] = None,
-        verify_key: Annotated[bool, Form(description="Whether to verify the key before saving")] = True
-    ) -> ApiKeyResponse:
-        """Save or update user API key with optional verification"""
-        try:
-            user = await get_current_user(token)
-            if not user:
-                raise HTTPException(status_code=401, detail="Invalid JWT token")
-            
-            # Validate provider
-            valid_providers = ["openai", "anthropic", "gemini", "groq"]
-            if provider not in valid_providers:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid provider. Valid providers: {', '.join(valid_providers)}"
-                )
-            
-            # Save key with verification
-            user_key = await llm_service.save_user_api_key(
-                user,
-                provider,
-                api_key,
-                verify=verify_key
-            )
-            # Set key_name if provided (the new service doesn't use key_name parameter)
-            if key_name and hasattr(user_key, 'key_name'):
-                user_key.key_name = key_name
-                await user_key.save()
-            
-            return ApiKeyResponse(
-                success=True,
-                message="API key saved successfully",
-                provider=provider,
-                key_name=user_key.key_name,
-                created_at=user_key.created_at
-            )
-            
-        except Exception as e:
-            return ApiKeyResponse(
-                success=False,
-                message=str(e),
-                provider=provider
-            )
     
-    # Cache for model data to prevent repeated calls
-    _models_cache = None
-    _models_cache_time = None
-    _cache_duration = 300  # 5 minutes
-    
-    async def get_available_models(
-        self,
-        token: Annotated[str, Form(description="JWT authentication token")]
-    ) -> AvailableModelsResponse:
-        """Get available models with user's key status (cached)"""
-        try:
-            user = await get_current_user(token)
-            if not user:
-                raise HTTPException(status_code=401, detail="Invalid JWT token")
-            
-            # Check cache first
-            current_time = time.time()
-            if (self._models_cache is not None and 
-                self._models_cache_time is not None and 
-                current_time - self._models_cache_time < self._cache_duration):
-                
-                # Update user-specific data in cached response
-                user_keys = await UserApiKey.find(
-                    UserApiKey.user.id == BeanieObjectId(user.id),
-                    UserApiKey.is_active == True
-                ).to_list()
-                
-                cached_response = self._models_cache
-                cached_response.user_has_keys = [key.provider for key in user_keys]
-                return cached_response
-            
-            # Get user's keys
-            user_keys = await UserApiKey.find(
-                UserApiKey.user.id == BeanieObjectId(user.id),
-                UserApiKey.is_active == True
-            ).to_list()
-            
-            user_has_keys = [key.provider for key in user_keys]
-            
-            # Get available models from LangChain service
-            from utils.langchain_llm_service import langchain_service
-            models = langchain_service.get_available_models()
-            
-            response = AvailableModelsResponse(
-                providers=models,
-                current_limits={},  # Remove limits
-                user_has_keys=user_has_keys
-            )
-            
-            # Cache the response (without user-specific data)
-            self._models_cache = AvailableModelsResponse(
-                providers=models,
-                current_limits={},  # Remove limits
-                user_has_keys=[]  # Will be updated per request
-            )
-            self._models_cache_time = current_time
-            
-            return response
-            
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
     
     async def update_chat_settings(
         self,
