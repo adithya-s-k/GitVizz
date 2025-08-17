@@ -32,21 +32,28 @@ class GitVizzToolsService:
         if not self.gitvizz_available:
             return None
         
+        print(f"[GitVizz] Getting graph for repository: {repository_id}")
+        
         # Check cache first
         if repository_id in self.graph_generators:
+            print(f"[GitVizz] Using cached graph for repository: {repository_id}")
             return self.graph_generators[repository_id]
         
         try:
             # Extract ZIP contents to temporary directory
             if not os.path.exists(zip_file_path):
-                print(f"ZIP file not found: {zip_file_path}")
+                print(f"[GitVizz] ZIP file not found: {zip_file_path}")
                 return None
             
+            print(f"[GitVizz] Extracting ZIP: {zip_file_path}")
             extracted_files, temp_extract_dir = extract_zip_contents(zip_file_path)
             
             if not extracted_files:
-                print("No files extracted from ZIP")
+                print("[GitVizz] No files extracted from ZIP")
                 return None
+            
+            print(f"[GitVizz] Creating GraphGenerator from: {temp_extract_dir}")
+            print(f"[GitVizz] Extracted {len(extracted_files)} files")
             
             # Create GitVizz GraphGenerator from extracted directory
             graph_generator = GraphGenerator.from_source(temp_extract_dir)
@@ -54,8 +61,9 @@ class GitVizzToolsService:
             # Cache the graph generator
             self.graph_generators[repository_id] = graph_generator
             
-            # Clean up temporary directory (graph generator has processed the files)
-            cleanup_temp_files([temp_extract_dir])
+            # Don't clean up immediately - GitVizz might need the files for analysis
+            # Store temp dir path for later cleanup if needed
+            graph_generator._temp_extract_dir = temp_extract_dir
             
             return graph_generator
             

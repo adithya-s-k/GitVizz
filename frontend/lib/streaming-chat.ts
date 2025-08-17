@@ -165,11 +165,11 @@ export async function* parseStreamingResponse(
               }
 
               // Always yield the token content
-              if (data.token !== undefined) {
+              if (data.content !== undefined || data.token !== undefined) {
                 // Check for undefined instead of truthy
                 yield {
                   type: 'token',
-                  content: data.token, // Can be empty string
+                  content: data.content || data.token, // Can be empty string
                   chat_id: data.chat_id,
                   conversation_id: data.conversation_id,
                 };

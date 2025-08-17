@@ -8,7 +8,6 @@ import asyncio
 from typing import Dict, List, Any, AsyncGenerator, Optional, TypedDict, Annotated
 from datetime import datetime
 from operator import add
-import asyncio
 
 
 # LangGraph imports
@@ -219,16 +218,48 @@ Available Tools:
 
 IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFORE providing any textual response. Do not provide analysis without first using tools to gather data from the repository."""
 
-            # Prepare messages - include conversation history
+            # Get all messages from state - this preserves conversation history
+            current_messages = state.get("messages", [])
+            print(f"[DEBUG] Current messages count: {len(current_messages)}")
+            for i, msg in enumerate(current_messages):
+                print(f"[DEBUG] Message {i}: {type(msg)} - {getattr(msg, 'content', 'No content')[:100]}")
+            
+            # Build message history starting with system prompt
             messages = [SystemMessage(content=system_prompt)]
-            messages.extend(state["messages"])
-
-            # If this is the first interaction, add the user query
-            if not any(
-                isinstance(msg, HumanMessage) and msg.content == state["user_query"]
-                for msg in messages
-            ):
+            
+            # Add existing conversation history (excluding system messages)
+            for msg in current_messages:
+                if not isinstance(msg, SystemMessage):
+                    try:
+                        messages.append(msg)
+                    except Exception as msg_error:
+                        print(f"[DEBUG] Error adding message {type(msg)}: {msg_error}")
+                        continue
+            
+            # If this is the first message in the conversation, add the user query
+            if not current_messages:
                 messages.append(HumanMessage(content=state["user_query"]))
+            
+            # Check and trim context if needed to fit model limits
+            try:
+                max_context_tokens = langchain_service.get_max_context_tokens(state["model"])
+                max_output_tokens = langchain_service.get_max_output_tokens_for_model(state["model"])
+                available_tokens = max_context_tokens - max_output_tokens - 1000  # Safety buffer
+                
+                # Count current tokens
+                current_tokens = langchain_service.count_tokens_approximately(messages)
+                print(f"[DEBUG] Current tokens: {current_tokens}, Available: {available_tokens}")
+                
+                if current_tokens > available_tokens:
+                    print(f"[DEBUG] Context too large: {current_tokens} > {available_tokens}, trimming...")
+                    # Trim messages to fit, keeping system prompt and recent messages
+                    try:
+                        messages = langchain_service.trim_messages_to_fit(messages, available_tokens)
+                        print(f"[DEBUG] After trimming: {langchain_service.count_tokens_approximately(messages)} tokens")
+                    except Exception as trim_error:
+                        print(f"[DEBUG] Trimming failed: {trim_error}, using original messages")
+            except Exception as e:
+                print(f"[DEBUG] Error in context management: {e}, proceeding without trimming")
 
             # Get response from LLM
             response = await llm_with_tools.ainvoke(messages)
@@ -240,17 +271,18 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                 print(f"[DEBUG] Tool calls: {response.tool_calls}")
             print(f"[DEBUG] Response content: {response.content[:200]}...")
 
-            # Add the response to messages
-            new_messages = [response]
+            # Append the new response to existing messages
+            updated_messages = current_messages + [response]
 
-            return {**state, "messages": new_messages}
+            return {**state, "messages": updated_messages}
 
         except Exception as e:
             # Create error response
             error_response = AIMessage(
                 content=f"I encountered an error while processing your request: {str(e)}"
             )
-            return {**state, "messages": [error_response]}
+            current_messages = state.get("messages", [])
+            return {**state, "messages": current_messages + [error_response]}
 
     async def _finalize_response_node(
         self, state: AgenticChatState
@@ -554,7 +586,7 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                 return
 
             initial_state = AgenticChatState(
-                messages=[HumanMessage(content=user_query)],
+                messages=[],
                 user_query=user_query,
                 repository_id=str(repository.id),
                 repository_zip_path=zip_file_path,
@@ -583,6 +615,7 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
             ) + "\n"
 
             accumulated_response = ""
+            tool_execution_started = False
 
             async for event in graph.astream_events(
                 initial_state, config, version="v2"
@@ -601,6 +634,7 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                         ) + "\n"
 
                 elif event_type == "on_tool_start":
+                    tool_execution_started = True
                     tool_name = event.get("name", "unknown_tool")
                     tool_input = event.get("data", {}).get("input", {})
 
@@ -613,7 +647,7 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                                 if isinstance(tool_input, dict)
                                 else {"input": str(tool_input)}
                             ),
-                            "status": "started",
+                            "status": "calling",
                             "message": f"🔧 Using {tool_name.replace('_', ' ').title()}...",
                         }
                     ) + "\n"
@@ -627,7 +661,19 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                     await asyncio.sleep(0.5)
 
                     tool_name = event.get("name", "unknown_tool")
-                    tool_output_str = str(event.get("data", {}).get("output", ""))
+                    tool_output = event.get("data", {}).get("output", "")
+                    
+                    # Handle different types of tool output
+                    if isinstance(tool_output, list):
+                        # If it's a list, join the elements
+                        tool_output_str = " ".join(str(item) for item in tool_output)
+                    elif hasattr(tool_output, 'content'):
+                        # If it's a message object with content
+                        tool_output_str = str(tool_output.content)
+                    else:
+                        # Default to string conversion
+                        tool_output_str = str(tool_output)
+                    
                     truncated_result = (
                         tool_output_str[:250] + "..."
                         if len(tool_output_str) > 250
@@ -639,7 +685,7 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                             "event": "function_complete",
                             "function_name": tool_name,
                             "result": truncated_result,
-                            "status": "completed",
+                            "status": "complete",
                             "message": f"✅ Completed {tool_name.replace('_', ' ').title()}",
                         }
                     ) + "\n"
@@ -647,17 +693,33 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                 elif event_type == "on_chat_model_stream":
                     chunk = event.get("data", {}).get("chunk")
                     if chunk and hasattr(chunk, "content") and chunk.content:
-                        accumulated_response += chunk.content
-                        yield json.dumps(
-                            {
-                                "event": "token",
-                                "token": chunk.content,
-                                "chat_id": chat_id,
-                                "conversation_id": conversation_id,
-                                "provider": provider,
-                                "model": model,
-                            }
-                        ) + "\n"
+                        # Only stream tokens for the final response (after tools have been executed)
+                        # This prevents streaming the intermediate AI message that just calls tools
+                        if tool_execution_started:
+                            # Handle different content types from newer models
+                            chunk_content = chunk.content
+                            if isinstance(chunk_content, list):
+                                # Extract text content from structured format
+                                text_content = ""
+                                for item in chunk_content:
+                                    if isinstance(item, dict) and item.get("type") == "text":
+                                        text_content += item.get("text", "")
+                                chunk_content = text_content
+                            elif not isinstance(chunk_content, str):
+                                chunk_content = str(chunk_content)
+                            
+                            if chunk_content:  # Only process if we have actual text content
+                                accumulated_response += chunk_content
+                                yield json.dumps(
+                                    {
+                                        "event": "token",
+                                        "content": chunk_content,
+                                        "chat_id": chat_id,
+                                        "conversation_id": conversation_id,
+                                        "provider": provider,
+                                        "model": model,
+                                    }
+                                ) + "\n"
 
             yield json.dumps(
                 {
@@ -672,11 +734,28 @@ IMPORTANT: You MUST call the appropriate tool(s) based on the user's query BEFOR
                 }
             ) + "\n"
 
-        except Exception as e:
-            error_msg = str(e)
+        except asyncio.CancelledError:
+            # Handle cancellation gracefully
+            print("[DEBUG] Agentic chat stream was cancelled")
             yield json.dumps(
-                {"event": "error", "error": error_msg, "error_type": "server_error"}
+                {"event": "error", "error": "Request was cancelled", "error_type": "cancelled"}
             ) + "\n"
+        except Exception as e:
+            import traceback
+            error_msg = str(e)
+            error_traceback = traceback.format_exc()
+            print(f"[DEBUG] Agentic chat error: {error_msg}")
+            print(f"[DEBUG] Full traceback:\n{error_traceback}")
+            
+            # Check for specific error types
+            if "can only concatenate str" in error_msg:
+                yield json.dumps(
+                    {"event": "error", "error": "Tool result processing error", "error_type": "tool_result_error", "details": error_msg}
+                ) + "\n"
+            else:
+                yield json.dumps(
+                    {"event": "error", "error": error_msg, "error_type": "server_error"}
+                ) + "\n"
 
     async def _fallback_streaming(
         self, user_query: str, user: Any, model: str, provider: str
