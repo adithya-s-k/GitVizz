@@ -189,7 +189,7 @@ GitVizz is built with modern, scalable technologies:
 │   Frontend      │    │    Backend      │    │   AI Services   │
 │                 │    │                 │    │                 │
 │ • Next.js 14    │◄──►│ • FastAPI       │◄──►│ • OpenAI        │
-│ • TypeScript    │    │ • Python 3.9+  │    │ • Anthropic     │
+│ • TypeScript    │    │ • Python 3.9+   │    │ • Anthropic     │
 │ • Tailwind CSS  │    │ • Async/Await   │    │ • Local LLMs    │
 │ • ShadCN UI     │    │ • Pydantic      │    │                 │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
