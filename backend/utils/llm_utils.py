@@ -561,7 +561,8 @@ class LLMService:
         function_call: Optional[str] = None,
         response_format: Optional[Dict] = None,
         user=None,
-        use_user_key: bool = False
+        use_user_key: bool = False,
+        api_key: Optional[str] = None
     ) -> Union[LLMResponse, AsyncGenerator[LLMStreamResponse, None]]:
         """
         Main LLM generation method
@@ -579,6 +580,7 @@ class LLMService:
             response_format: Structured output format
             user: User object for API key lookup
             use_user_key: Whether to use user's API key
+            api_key: Direct API key to use (bypasses user/system key lookup)
             
         Returns:
             LLMResponse or AsyncGenerator of LLMStreamResponse
@@ -588,8 +590,9 @@ class LLMService:
             if not provider:
                 provider = self.detect_provider_from_model(model)
             
-            # Get API key
-            api_key = await self.get_api_key(provider, user, use_user_key)
+            # Get API key - use provided key or fallback to get_api_key
+            if not api_key:
+                api_key = await self.get_api_key(provider, user, use_user_key)
             
             # Prepare messages
             llm_messages = messages.copy()
