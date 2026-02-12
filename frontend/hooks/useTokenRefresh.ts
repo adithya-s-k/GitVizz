@@ -1,4 +1,4 @@
-import { useSession } from 'next-auth/react';
+import { useSession, signOut } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect } from 'react';
 import { refreshJwtToken } from '../utils/api';
@@ -13,6 +13,12 @@ export function useTokenRefresh() {
 
   const checkAndRefreshToken = useCallback(async () => {
     if (!session?.jwt_token || !session?.refresh_token) {
+      return false;
+    }
+
+    // If the session has an error (e.g., refresh token expired), sign out
+    if (session.error === 'RefreshTokenError') {
+      await signOut({ callbackUrl: '/signin' });
       return false;
     }
 
