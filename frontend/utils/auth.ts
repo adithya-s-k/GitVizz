@@ -37,26 +37,26 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
             let data = await getJwtToken(token.accessToken);
 
             token.jwt_token = 'Bearer ' + data.jwt_token;
-            token.exp = data.expires_in;
+            token.backendTokenExp = data.expires_in;
             token.user_id = data.user_id;
             token.token_type = data.token_type;
             token.refresh_token = data.refresh_token;
             token.refresh_expires_in = data.refresh_expires_in;
           } catch (error) {
             console.error('Failed to get JWT token during login:', error);
-            return null; // This will force re-authentication
+            return token; // Return token as-is; don't force re-authentication on transient errors
           }
         }
       }
 
-      // Return previous token if the access token has not expired yet
+      // Return previous token if the backend access token has not expired yet
       const currentTime = Math.floor(Date.now() / 1000);
-      if (token.exp && currentTime < token.exp - 300) {
-        // Refresh 5 minutes before expiry
+      if (token.backendTokenExp && currentTime < (token.backendTokenExp as number) - 300) {
+        // Token still valid (with 5 minute buffer before expiry)
         return token;
       }
 
-      // Access token has expired, try to update it using refresh token
+      // Backend access token has expired, try to update it using refresh token
       if (token.refresh_token) {
         try {
           const refreshedTokens = await refreshJwtToken(token.refresh_token as string);
@@ -64,17 +64,17 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
           return {
             ...token,
             jwt_token: 'Bearer ' + refreshedTokens.access_token,
-            exp: refreshedTokens.expires_in,
+            backendTokenExp: refreshedTokens.expires_in,
           };
         } catch (error) {
           console.error('Failed to refresh token:', error);
-          // Refresh token is invalid or expired, force re-authentication
-          return null;
+          // Return token with error flag instead of null to avoid losing session
+          return { ...token, error: 'RefreshTokenError' };
         }
       }
 
-      // No refresh token available, force re-authentication
-      return null;
+      // No refresh token available but don't destroy the session
+      return token;
     },
     session: async ({ session, token }) => {
       if (!token) {
@@ -83,10 +83,11 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
       session.accessToken = token.accessToken;
       session.jwt_token = token.jwt_token;
-      session.expires_in = token.exp;
+      session.expires_in = token.backendTokenExp as number;
       session.user_id = token.user_id;
       session.token_type = token.token_type;
       session.refresh_token = token.refresh_token;
+      session.error = token.error as string;
       return session;
     },
   },

@@ -8,6 +8,7 @@ declare module 'next-auth' {
     user_id?: any;
     token_type?: any;
     refresh_token?: any;
+    error?: string;
   }
   interface JWT {
     accessToken?: any;
@@ -17,6 +18,7 @@ declare module 'next-auth' {
     token_type?: any;
     refresh_token?: any;
     refresh_expires_in?: number;
-    exp?: number;
+    backendTokenExp?: number;
+    error?: string;
   }
 }
