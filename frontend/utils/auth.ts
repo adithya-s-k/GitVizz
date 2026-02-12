@@ -51,7 +51,7 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
       // Return previous token if the backend access token has not expired yet
       const currentTime = Math.floor(Date.now() / 1000);
-      if (token.backendTokenExp && currentTime < (token.backendTokenExp as number) - 300) {
+      if (token.backendTokenExp && currentTime < token.backendTokenExp - 300) {
         // Token still valid (with 5 minute buffer before expiry)
         return token;
       }
@@ -83,11 +83,13 @@ export const { auth, handlers, signIn, signOut } = NextAuth({
 
       session.accessToken = token.accessToken;
       session.jwt_token = token.jwt_token;
-      session.expires_in = token.backendTokenExp as number;
+      session.expires_in = token.backendTokenExp ?? 0;
       session.user_id = token.user_id;
       session.token_type = token.token_type;
       session.refresh_token = token.refresh_token;
-      session.error = token.error as string;
+      if (token.error) {
+        session.error = token.error;
+      }
       return session;
     },
   },
