@@ -86,6 +86,70 @@ def setup_repository_from_zip(zip_path: str, extract_to: str) -> str:
     except Exception as e:
         raise IOError(f"An unexpected error occurred during unzipping: {e}")
 
+def read_files_for_graph(repo_path: str) -> List[Dict[str, Any]]:
+    """
+    Read files from a repository in the format expected by GraphGenerator.
+    
+    This function returns a list of dicts with 'path', 'content', and 'full_path'
+    keys, which is what GraphGenerator expects for parsing.
+    
+    Args:
+        repo_path: Path to the repository root
+        
+    Returns:
+        List of file dictionaries for GraphGenerator
+    """
+    files = []
+    repo_root = Path(repo_path).resolve()
+    
+    # Extensions that GraphGenerator can parse
+    parseable_extensions = {
+        ".py", ".js", ".jsx", ".ts", ".tsx", ".ipynb"
+    }
+    
+    # Directories to skip
+    skip_dirs = {
+        '.git', 'node_modules', '__pycache__', '.venv', 'venv', 
+        'env', '.env', 'dist', 'build', '.next', '.cache',
+        'coverage', '.nyc_output', '.pytest_cache'
+    }
+    
+    for root, dirs, filenames in os.walk(repo_root):
+        # Filter out skip directories
+        dirs[:] = [d for d in dirs if d not in skip_dirs and not d.startswith('.')]
+        
+        for filename in filenames:
+            file_ext = Path(filename).suffix.lower()
+            if file_ext not in parseable_extensions:
+                continue
+            
+            full_path = Path(root) / filename
+            
+            try:
+                content = full_path.read_text(encoding='utf-8', errors='ignore')
+                
+                # Skip empty or very small files
+                if len(content.strip()) < 10:
+                    continue
+                
+                # Get relative path from repo root
+                try:
+                    relative_path = full_path.relative_to(repo_root)
+                except ValueError:
+                    relative_path = full_path.name
+                
+                files.append({
+                    "path": str(relative_path).replace("\\", "/"),
+                    "content": content,
+                    "full_path": str(full_path)
+                })
+                
+            except Exception as e:
+                print(f"Warning: Could not read {full_path}: {e}")
+    
+    return files
+
+
 def read_documents(path: str, max_tokens: int = 8000) -> List[Document]:
     """Read documents from directory"""
     documents = []

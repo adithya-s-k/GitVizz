@@ -91,7 +91,8 @@ class LLMClient:
                 max_tokens=max_tokens,
                 stream=False,
                 user=self.user,
-                use_user_key=self.use_user_key
+                use_user_key=self.use_user_key,
+                api_key=self.api_key
             )
 
             if response.success and response.content:
